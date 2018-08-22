@@ -7,6 +7,7 @@
 */
 module.exports = (argv, options) => {
   const chalk = require("chalk");
+  const messages = require("./messages");
   const packageJson = require("../package.json");
   const parseArgs = require("./parse-args");
 
@@ -16,12 +17,10 @@ module.exports = (argv, options) => {
 
   const SUCCESS = 0;
   const FAILURE = 1;
-  const bold = chalk.bold;
-  const dim = chalk.dim;
 
   // Output version
   if (args.version) {
-    outputStream.write(`${bold("elm-live")} v${packageJson.version}\n`);
+    outputStream.write(`${chalk.bold("elm-live")} v${packageJson.version}\n`);
     return SUCCESS;
   }
 
@@ -45,13 +44,12 @@ module.exports = (argv, options) => {
         "../manpages/elm-live.1.txt"
       );
       const plainTextHelp = fs.readFileSync(fallbackPath, "utf8");
-      outputStream.write(plainTextHelp);
+      outputStream.write(plainTextHelp + messages.help());
     }
 
     return SUCCESS;
   }
 
-  const indent = require("indent-string");
   const budo = require("budo");
   const chokidar = require("chokidar");
   const debounce = require("./debounce");
@@ -66,39 +64,15 @@ module.exports = (argv, options) => {
     });
 
     if (process.error && process.error.code === "ENOENT") {
-      outputStream.write(
-        `
-${dim("elm-live:")}
-  I can’t find the command ${bold(execPath)}!
-  Please make sure you can call ${bold(execPath)}
-  from your command line.
-
-`
-      );
+      outputStream.write(messages.cmdNotFound(execPath));
 
       return { fatal: true, exitCode: FAILURE };
     } else if (process.error) {
-      outputStream.write(
-        `
-${dim("elm-live:")}
-  Error while calling ${bold(execPath)}! This output may be helpful:
-
-${indent(String(process.error), 2)}
-
-`
-      );
+      outputStream.write(messages.cmdError(execPath, process.error));
     }
 
     if (args.recover && process.status !== SUCCESS)
-      outputStream.write(
-        `
-${dim("elm-live:")}
-  ${bold(execPath)} failed! You can find more info above. Keep calm
-  and take your time to check why the command is failing. We’ll try
-  to run it again as soon as you change an Elm file.
-
-`
-      );
+      outputStream.write(messages.cmdFailure(execPath));
 
     return { fatal: false, exitCode: process.status };
   };
@@ -115,43 +89,14 @@ ${dim("elm-live:")}
     });
 
     if (elmMake.error && elmMake.error.code === "ENOENT") {
-      outputStream.write(
-        `
-${dim("elm-live:")}
-  I can’t find the command ${bold(args.pathToElm)}!
-  Looks like ${bold("elm-platform")} isn’t installed. Make sure you’ve followed
-  the steps at https://git.io/elm-platform and that you can call
-  ${bold(args.pathToElm)} from your command line.
-
-  If that fails, have a look at open issues:
-  https://github.com/tomekwi/elm-live/issues .
-
-`
-      );
-
+      outputStream.write(messages.noElmSrc(args.pathToElm));
       return { fatal: true, exitCode: FAILURE };
     } else if (elmMake.error) {
-      outputStream.write(
-        `
-${dim("elm-live:")}
-  Error while calling ${bold("elm make")}! This output may be helpful:
-
-${indent(String(elmMake.error), 2)}
-
-`
-      );
+      outputStream.write(messages.cmdError("elm make", elmMake.error));
     }
 
     if (args.recover && elmMake.status !== SUCCESS)
-      outputStream.write(
-        `
-${dim("elm-live:")}
-  ${bold("elm make")} failed! You can find more info above. Keep calm
-  and take your time to fix your code. We’ll try to compile it again
-  as soon as you change a file.
-
-`
-      );
+      outputStream.write(messages.makeFailure("elm make"));
 
     const afterBuild = auxiliaryBuild(args.afterBuild);
     if (afterBuild.exitCode !== SUCCESS) {
@@ -164,16 +109,7 @@ ${dim("elm-live:")}
   // Server logic
   let serverStarted;
   const startServer = () => {
-    outputStream.write(
-      `
-${dim("elm-live:")}
-  The build has succeeded. Starting the server!${args.open
-    ? ` We’ll open your app
-  in the default browser as soon as it’s up and running.`
-    : ""}
-
-`
-    );
+    outputStream.write(messages.startingServer(args.open));
     const server = budo({
       live: true,
       watchGlob: path.join(args.dir, "**/*.{html,css,js}"),
@@ -220,16 +156,10 @@ ${dim("elm-live:")}
   watcher.on(
     "all",
     debounce((event, filePath) => {
-      const relativePath = path.relative(process.cwd(), filePath);
       const eventName = eventNameMap[event] || event;
+      const relativePath = path.relative(process.cwd(), filePath);
 
-      outputStream.write(
-        `
-${dim("elm-live:")}
-  You’ve ${eventName} \`${relativePath}\`. Rebuilding!
-
-`
-      );
+      outputStream.write(messages.rebuilding(eventName, relativePath));
 
       const buildResult = build();
       if (!serverStarted && buildResult.exitCode === SUCCESS) {
