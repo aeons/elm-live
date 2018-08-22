@@ -7,6 +7,7 @@ const devnull = require("dev-null");
 const qs = require("q-stream");
 const naked = require("strip-ansi");
 const debounce = require("./source/debounce");
+const messages = require("./source/messages");
 
 const dummyConfig = { inputStream: devnull(), outputStream: devnull() };
 const dummyCrossSpawn = { sync: () => ({ status: 0 }) };
@@ -14,6 +15,8 @@ const dummyBudoServer = { on: () => {} };
 const dummyBudo = () => dummyBudoServer;
 const dummyChokidarWatcher = { on: () => {} };
 const dummyChokidar = { watch: () => dummyChokidarWatcher };
+
+const rawString = str => naked(str.replace(/\s/g, ""));
 
 const newElmLive = mocks =>
   proxyquire(
@@ -98,7 +101,11 @@ of a white Christmas
     };
 
     const outputStream = qs(chunk => {
-      assert.is(chunk, expectedHelpContent, "prints the help text");
+      assert.is(
+        chunk,
+        expectedHelpContent + messages.help(),
+        "prints the help text"
+      );
 
       resolve();
     });
@@ -262,14 +269,13 @@ test("Informs of compile errors", assert =>
       if (run === 1)
         resolve(
           assert.is(
-            naked(chunk),
-            `
+            rawString(chunk),
+            rawString(`
 elm-live:
   elm make failed! You can find more info above. Keep calm
   and take your time to fix your code. We’ll try to compile it again
   as soon as you change a file.
-
-`,
+            `),
             "prints a friendly message afterwards"
           )
         );
@@ -300,14 +306,14 @@ test("Prints any other `elm make` error", assert =>
     const exitCode = elmLive(["--no-recover"], {
       outputStream: qs(chunk => {
         assert.is(
-          naked(chunk),
-          `
+          rawString(chunk),
+          rawString(`
 elm-live:
   Error while calling elm make! This output may be helpful:
 
   ${message}
 
-`,
+`),
           "prints the error’s output"
         );
 
@@ -671,12 +677,11 @@ test("Watches all `**/*.elm` files in the current directory", assert =>
         if (chunkNumber !== 3) return;
 
         assert.is(
-          naked(chunk),
-          `
+          rawString(chunk),
+          rawString(`
 elm-live:
   You’ve changed \`${relativePath}\`. Rebuilding!
-
-`,
+          `),
           "prints a message when a file is changed"
         );
 
@@ -745,14 +750,13 @@ test("Informs of `--before-build` and `--after-build` run errors", assert =>
         if (run === 1)
           resolve(
             assert.is(
-              naked(chunk),
-              `
+              rawString(chunk),
+              rawString(`
 elm-live:
   testCommand failed! You can find more info above. Keep calm
   and take your time to check why the command is failing. We’ll try
-  to run it again as soon as you change an Elm file.
-
-`,
+  to run it again as soon as you change a file.
+              `),
               "prints a friendly message afterwards"
             )
           );
@@ -835,14 +839,13 @@ test("Prints any other `--before-build` or `--after-build` command error", asser
         {
           outputStream: qs(chunk => {
             assert.is(
-              naked(chunk),
-              `
+              rawString(chunk),
+              rawString(`
 elm-live:
   Error while calling testCommand! This output may be helpful:
 
   ${message}
-
-`,
+              `),
               "prints the error’s output"
             );
 
